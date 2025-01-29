@@ -1,0 +1,10 @@
+{
+	"scripts": {
+		"format": "bunx biome check --write"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"@biomejs/biome": "1.9.4",
+		"@types/bun": "^1.2.1"
+	}
+}
