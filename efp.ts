@@ -77,21 +77,20 @@ export class ExcelFormulaParser {
 
   private handleOpenBrace(): void {
     this.finalizeCurrentToken();
+    // Push only ARRAY token
     this.stack.push(
       this.addToken(TokenType.Function, TokenSubType.Start, "ARRAY")
-    );
-    this.stack.push(
-      this.addToken(TokenType.Function, TokenSubType.Start, "ARRAYROW")
     );
     this.offset++;
   }
 
   private handleCloseBrace(): void {
     this.finalizeCurrentToken();
-    this.addToken(TokenType.Function, TokenSubType.Stop, "");
-    this.addToken(TokenType.Function, TokenSubType.Stop, "");
-    this.stack.pop();
-    this.stack.pop();
+    // Add token with "ARRAY" value to match opening brace
+    this.addToken(TokenType.Function, TokenSubType.Stop, "ARRAY"); // <-- Fix here
+    if (this.stack.length > 0) {
+      this.stack.pop();
+    }
     this.offset++;
   }
 
@@ -105,10 +104,16 @@ export class ExcelFormulaParser {
   private handleComma(): void {
     this.finalizeCurrentToken();
 
-    // Check if we're in a function context
+    // Check if inside an array
+    const inArray = this.stack.some(
+      (t) => t.value === "ARRAY" || t.value === "ARRAYROW"
+    );
     const inFunction = this.stack.some((t) => t.type === TokenType.Function);
 
-    if (inFunction) {
+    if (inArray) {
+      // Treat comma as column separator within array
+      this.addToken(TokenType.OperatorInfix, TokenSubType.Union, ",");
+    } else if (inFunction) {
       this.addToken(TokenType.Argument, "", ",");
     } else {
       this.addToken(TokenType.OperatorInfix, TokenSubType.Union, ",");
@@ -323,13 +328,20 @@ export class ExcelFormulaParser {
   private handleCloseParen(): void {
     this.addTokenFromBuffer();
 
+    let tokenAdded = false;
     if (this.stack.length > 0) {
       const stackToken = this.stack.pop();
       if (stackToken?.type === TokenType.Function) {
         this.addToken(TokenType.Function, TokenSubType.Stop, "");
+        tokenAdded = true;
       } else {
         this.addToken(TokenType.Subexpression, TokenSubType.Stop, "");
+        tokenAdded = true;
       }
+    }
+    // Add a closing parenthesis even if there's no matching opening
+    if (!tokenAdded) {
+      this.addToken(TokenType.Subexpression, TokenSubType.Stop, "");
     }
     this.offset++;
   }
@@ -362,9 +374,15 @@ export class ExcelFormulaParser {
             }
           }
           break;
+
         case TokenType.OperatorInfix:
           if (token.value === ",") {
-            output += arrayDepth > 0 ? ";" : ",";
+            // Check if inside array to avoid converting to semicolon
+            if (arrayDepth > 0) {
+              output += ",";
+            } else {
+              output += ",";
+            }
           } else {
             output += ` ${token.value} `;
           }
@@ -510,7 +528,7 @@ export class ExcelFormulaParser {
     let indent = 0;
 
     for (const token of tokens) {
-      if (token.subtype === TokenSubType.Stop) indent--;
+      if (token.subtype === TokenSubType.Stop) indent = Math.max(0, indent - 1);
 
       output += "  ".repeat(indent);
       output += `${token.value} <${token.type}> <${token.subtype}>\n`;
