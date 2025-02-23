@@ -212,30 +212,26 @@ export class ExcelFormulaParser {
 	}
 
 	private handleError(char: string): boolean {
-		this.currentToken.push(char);
-		this.offset++;
+		// Continue consuming characters until we hit a delimiter
+		while (this.offset < this.chars.length) {
+			const currentChar = this.chars[this.offset];
+			// Stop if we hit an operator or whitespace
+			if (/[\s+\-*/^&=<>,()]/.test(currentChar)) {
+				break;
+			}
+			this.currentToken.push(currentChar);
+			this.offset++;
+		}
 
 		const error = this.currentToken.join("");
-		if (this.isExcelError(error)) {
-			this.inError = false;
-			this.addToken(TokenType.Operand, TokenSubType.Error);
-		}
+		this.inError = false;
+		this.addToken(TokenType.Operand, TokenSubType.Error);
+
 		return true;
 	}
 
 	private isExcelError(value: string): boolean {
-		const errors = [
-			"#NULL!",
-			"#DIV/0!",
-			"#VALUE!",
-			"#REF!",
-			"#NAME?",
-			"#NUM!",
-			"#N/A",
-			"#SPILL!",
-			"#CALC!",
-		];
-		return errors.includes(value);
+		return value.startsWith("#");
 	}
 
 	private handleOperators(char: string): boolean {
