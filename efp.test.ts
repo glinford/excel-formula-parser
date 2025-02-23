@@ -151,133 +151,140 @@ describe("ExcelFormulaParser", () => {
   describe.skip("Additional cases", () => {
     let parser: ExcelFormulaParser;
     beforeEach(() => {
-        parser = new ExcelFormulaParser();
-    })
+      parser = new ExcelFormulaParser();
+    });
     test("Nested arrays with mixed separators", () => {
-        const formula = "={1,{2;3},4}";
-        const tokens = parser.parse(formula);
-        expect(parser.render(tokens)).toBe("{1,{2;3},4}");
-      });
+      const formula = "={1,{2;3},4}";
+      const tokens = parser.parse(formula);
+      expect(parser.render(tokens)).toBe("{1,{2;3},4}");
+    });
 
-      test("Implicit intersection operator", () => {
-        const formula = "=A1:A10 B1:B10";
-        const tokens = parser.parse(formula);
-        expect(tokens.some(t => 
-          t.type === TokenType.OperatorInfix && 
-          t.subtype === TokenSubType.Intersection
-        )).toBe(true);
-      });
+    test("Implicit intersection operator", () => {
+      const formula = "=A1:A10 B1:B10";
+      const tokens = parser.parse(formula);
+      expect(
+        tokens.some(
+          (t) =>
+            t.type === TokenType.OperatorInfix &&
+            t.subtype === TokenSubType.Intersection
+        )
+      ).toBe(true);
+    });
 
-      test("Table structured references", () => {
-        const formula = "=SUM(Table1[Column],Table2[@Price])";
-        const tokens = parser.parse(formula);
-        expect(tokens.some(t => 
-          t.type === TokenType.Operand && 
-          t.value === "Table1[Column]"
-        )).toBe(true);
-      });
+    test("Table structured references", () => {
+      const formula = "=SUM(Table1[Column],Table2[@Price])";
+      const tokens = parser.parse(formula);
+      expect(
+        tokens.some(
+          (t) => t.type === TokenType.Operand && t.value === "Table1[Column]"
+        )
+      ).toBe(true);
+    });
 
-      test("Multiple consecutive unary operators", () => {
-        const formula = "=--+-+A1";
-        const tokens = parser.parse(formula);
-        const unaries = tokens.filter(t => 
-          t.type === TokenType.OperatorPrefix
-        );
-        expect(unaries.length).toBe(5);
-      });
+    test("Multiple consecutive unary operators", () => {
+      const formula = "=--+-+A1";
+      const tokens = parser.parse(formula);
+      const unaries = tokens.filter((t) => t.type === TokenType.OperatorPrefix);
+      expect(unaries.length).toBe(5);
+    });
 
-      test("Spilled range operator", () => {
-        const formula = "=A1#";
-        const tokens = parser.parse(formula);
-        expect(tokens).toMatchObject([
-          { type: TokenType.Operand, value: "A1#", subtype: TokenSubType.Range }
-        ]);
-      });
+    test("Spilled range operator", () => {
+      const formula = "=A1#";
+      const tokens = parser.parse(formula);
+      expect(tokens).toMatchObject([
+        { type: TokenType.Operand, value: "A1#", subtype: TokenSubType.Range },
+      ]);
+    });
 
-      test("LAMBDA function with parameters", () => {
-        const formula = "=LAMBDA(x,y,x+y)(2,3)";
-        const tokens = parser.parse(formula);
-        expect(tokens.some(t => 
-          t.type === TokenType.Function && 
-          t.value === "LAMBDA"
-        )).toBe(true);
-      });
+    test("LAMBDA function with parameters", () => {
+      const formula = "=LAMBDA(x,y,x+y)(2,3)";
+      const tokens = parser.parse(formula);
+      expect(
+        tokens.some(
+          (t) => t.type === TokenType.Function && t.value === "LAMBDA"
+        )
+      ).toBe(true);
+    });
 
-      test("Dynamic array function arguments", () => {
-        const formula = "=SORT(FILTER(A:A,B:B>0))";
-        const tokens = parser.parse(formula);
-        expect(tokens.filter(t => 
-          t.type === TokenType.Function
-        ).length).toBe(2);
-      });
+    test("Dynamic array function arguments", () => {
+      const formula = "=SORT(FILTER(A:A,B:B>0))";
+      const tokens = parser.parse(formula);
+      expect(tokens.filter((t) => t.type === TokenType.Function).length).toBe(
+        2
+      );
+    });
 
-      test("Sheet names with special characters", () => {
-        const formula = "='Sheet ''A''!A1";
-        const tokens = parser.parse(formula);
-        expect(tokens).toMatchObject([
-          { type: TokenType.Operand, value: "'Sheet ''A''!A1" }
-        ]);
-      });
+    test("Sheet names with special characters", () => {
+      const formula = "='Sheet ''A''!A1";
+      const tokens = parser.parse(formula);
+      expect(tokens).toMatchObject([
+        { type: TokenType.Operand, value: "'Sheet ''A''!A1" },
+      ]);
+    });
 
-      test("Sanitize formula injection attempts", () => {
-        const formula = '=HYPERLINK("javascript:alert(1)")';
-        const tokens = parser.parse(formula);
-        // Should parse as text operand, not execute code
-        expect(tokens).toMatchObject([
-          { type: TokenType.Function, value: "HYPERLINK" },
-          { type: TokenType.Operand, subtype: TokenSubType.Text }
-        ]);
-      });
+    test("Sanitize formula injection attempts", () => {
+      const formula = '=HYPERLINK("javascript:alert(1)")';
+      const tokens = parser.parse(formula);
+      // Should parse as text operand, not execute code
+      expect(tokens).toMatchObject([
+        { type: TokenType.Function, value: "HYPERLINK" },
+        { type: TokenType.Operand, subtype: TokenSubType.Text },
+      ]);
+    });
 
-      test("Non-English function names", () => {
-        // Simulate French locale SUM = SOMME
-        const formula = "=SOMME(A1:A10)";
-        const tokens = parser.parse(formula);
-        expect(tokens).toMatchObject([
-          { type: TokenType.Function, value: "SOMME" }
-        ]);
-      });
+    test("Non-English function names", () => {
+      // Simulate French locale SUM = SOMME
+      const formula = "=SOMME(A1:A10)";
+      const tokens = parser.parse(formula);
+      expect(tokens).toMatchObject([
+        { type: TokenType.Function, value: "SOMME" },
+      ]);
+    });
 
-      test("Partial error values", () => {
-        const formula = "=#VALU";
-        const tokens = parser.parse(formula);
-        expect(tokens).toMatchObject([
-          { type: TokenType.Operand, subtype: TokenSubType.Error, value: "#VALU" }
-        ]);
-      });
+    test("Partial error values", () => {
+      const formula = "=#VALU";
+      const tokens = parser.parse(formula);
+      expect(tokens).toMatchObject([
+        {
+          type: TokenType.Operand,
+          subtype: TokenSubType.Error,
+          value: "#VALU",
+        },
+      ]);
+    });
 
-      test("Non-breaking spaces", () => {
-        const formula = "=SUM(A1\u00A0B1)"; // &nbsp; separator
-        const tokens = parser.parse(formula);
-        expect(tokens).toMatchObject([
-          { type: TokenType.OperatorInfix, subtype: TokenSubType.Intersection }
-        ]);
-      });
+    test("Non-breaking spaces", () => {
+      const formula = "=SUM(A1\u00A0B1)"; // &nbsp; separator
+      const tokens = parser.parse(formula);
+      expect(tokens).toMatchObject([
+        { type: TokenType.OperatorInfix, subtype: TokenSubType.Intersection },
+      ]);
+    });
 
-      test("Volatile function recognition", () => {
-        const formula = "=NOW()+RAND()";
-        const tokens = parser.parse(formula);
-        expect(tokens.filter(t => 
-          t.type === TokenType.Function
-        ).length).toBe(2);
-      });
+    test("Volatile function recognition", () => {
+      const formula = "=NOW()+RAND()";
+      const tokens = parser.parse(formula);
+      expect(tokens.filter((t) => t.type === TokenType.Function).length).toBe(
+        2
+      );
+    });
 
-      test("Date serial numbers", () => {
-        const formula = "=DATE(2023,1,15)+TIME(12,0,0)";
-        const tokens = parser.parse(formula);
-        expect(tokens.filter(t => 
-          t.type === TokenType.Function
-        ).length).toBe(2);
-      });
+    test("Date serial numbers", () => {
+      const formula = "=DATE(2023,1,15)+TIME(12,0,0)";
+      const tokens = parser.parse(formula);
+      expect(tokens.filter((t) => t.type === TokenType.Function).length).toBe(
+        2
+      );
+    });
 
-      test("Implicit array expansion", () => {
-        const formula = "=A1:A10*B1:B10";
-        const tokens = parser.parse(formula);
-        expect(tokens).toMatchObject([
-          { type: TokenType.Operand, subtype: TokenSubType.Range },
-          { type: TokenType.OperatorInfix, subtype: TokenSubType.Math },
-          { type: TokenType.Operand, subtype: TokenSubType.Range }
-        ]);
-      });
-  })
+    test("Implicit array expansion", () => {
+      const formula = "=A1:A10*B1:B10";
+      const tokens = parser.parse(formula);
+      expect(tokens).toMatchObject([
+        { type: TokenType.Operand, subtype: TokenSubType.Range },
+        { type: TokenType.OperatorInfix, subtype: TokenSubType.Math },
+        { type: TokenType.Operand, subtype: TokenSubType.Range },
+      ]);
+    });
+  });
 });
