@@ -182,6 +182,12 @@ describe("ExcelFormulaParser", () => {
 				value: "SOMME",
 			});
 		});
+
+		test("Nested arrays with mixed separators", () => {
+			const formula = "={1,{2;3},4}";
+			const tokens = parser.parse(formula);
+			expect(parser.render(tokens)).toBe("{1,{2;3},4}");
+		});
 	});
 
 	describe.skip("Additional cases", () => {

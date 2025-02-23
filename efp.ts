@@ -78,7 +78,6 @@ export class ExcelFormulaParser {
 
 	private handleOpenBrace(): void {
 		this.finalizeCurrentToken();
-		// Push only ARRAY token
 		this.stack.push(
 			this.addToken(TokenType.Function, TokenSubType.Start, "ARRAY"),
 		);
@@ -87,8 +86,7 @@ export class ExcelFormulaParser {
 
 	private handleCloseBrace(): void {
 		this.finalizeCurrentToken();
-		// Add token with "ARRAY" value to match opening brace
-		this.addToken(TokenType.Function, TokenSubType.Stop, "ARRAY"); // <-- Fix here
+		this.addToken(TokenType.Function, TokenSubType.Stop, "ARRAY");
 		if (this.stack.length > 0) {
 			this.stack.pop();
 		}
@@ -131,14 +129,27 @@ export class ExcelFormulaParser {
 		this.offset++;
 	}
 
-	// Helper method for array handling
 	private handleArraySeparator(): void {
 		this.finalizeCurrentToken();
-		this.addToken(TokenType.Function, TokenSubType.Stop, "");
-		this.addToken(TokenType.Argument, "", ";");
-		this.stack.push(
-			this.addToken(TokenType.Function, TokenSubType.Start, "ARRAYROW"),
-		);
+		// Only add ARRAYROW for semicolons that aren't inside a nested array
+		const lastArrayDepth = this.stack.filter(
+			(t) => t.value === "ARRAY",
+		).length;
+		if (lastArrayDepth === 1) {
+			// We're at the top level array
+			this.addToken(TokenType.Function, TokenSubType.Stop, "ARRAYROW");
+			this.addToken(TokenType.Argument, "", ";");
+			this.stack.push(
+				this.addToken(
+					TokenType.Function,
+					TokenSubType.Start,
+					"ARRAYROW",
+				),
+			);
+		} else {
+			// We're in a nested array, just add the separator
+			this.addToken(TokenType.Argument, "", ";");
+		}
 		this.offset++;
 	}
 
@@ -351,13 +362,11 @@ export class ExcelFormulaParser {
 
 	public render(tokens: FormulaToken[]): string {
 		let output = "";
-		let inFunction = false;
 		let arrayDepth = 0;
 
 		for (const token of tokens) {
 			switch (token.type) {
 				case TokenType.Function:
-					// Handle array rendering using token value
 					if (token.value === "ARRAY" || token.value === "ARRAYROW") {
 						if (token.subtype === TokenSubType.Start) {
 							output += "{";
@@ -370,22 +379,19 @@ export class ExcelFormulaParser {
 						// Normal function handling
 						if (token.subtype === TokenSubType.Start) {
 							output += `${token.value}(`;
-							inFunction = true;
 						} else {
 							output += ")";
-							inFunction = false;
 						}
 					}
 					break;
 
+				case TokenType.Subexpression:
+					output += token.subtype === TokenSubType.Start ? "(" : ")";
+					break;
+
 				case TokenType.OperatorInfix:
 					if (token.value === ",") {
-						// Check if inside array to avoid converting to semicolon
-						if (arrayDepth > 0) {
-							output += ",";
-						} else {
-							output += ",";
-						}
+						output += arrayDepth > 0 ? "," : ",";
 					} else {
 						output += ` ${token.value} `;
 					}
@@ -395,20 +401,16 @@ export class ExcelFormulaParser {
 					output += token.value;
 					break;
 
+				case TokenType.Argument:
+					output += arrayDepth > 1 ? ";" : ",";
+					break;
+
 				case TokenType.Operand:
 					if (token.subtype === TokenSubType.Text) {
 						output += `"${token.value}"`;
 					} else {
 						output += token.value;
 					}
-					break;
-
-				case TokenType.Argument:
-					output += arrayDepth ? ";" : ",";
-					break;
-
-				case TokenType.Subexpression:
-					output += token.subtype === TokenSubType.Start ? "(" : ")";
 					break;
 
 				default:
@@ -420,10 +422,9 @@ export class ExcelFormulaParser {
 			.replace(/\s+/g, " ")
 			.replace(/([+\-*/^=<>])\s+/g, "$1")
 			.replace(/\s+([+\-*/^=<>])/g, "$1")
-			.replace(/" "/g, '""') // Handle empty strings
+			.replace(/" "/g, '""')
 			.trim();
 	}
-
 	private handleWhitespace(char: string): boolean {
 		if (char !== " ") return false;
 
